@@ -11,6 +11,7 @@ import java.io.InputStream;
 import java.math.BigInteger;
 import java.util.Random;
 
+import com.mirea.RSA.KeyPair.PrivateKey;
 import com.mirea.RSA.KeyPair.PublicKey;
 
 public class RSA {
@@ -174,16 +175,6 @@ public class RSA {
     }
 
 
-
-    /**
-     * Распаковывает файл с ключами и возвращает объект {@link KeyPair}
-     * @param publicKey - имя файла с открытым ключом
-     * @param privateKey - имя файла с закрытым ключом
-     * @return
-     */
-    public static KeyPair getKeyPair(String publicKey, String privateKey) {
-    }
-
     /**
      * Распаковывает файл с открытым ключом и возвращает объект {@link PublicKey}
      * @param publicKey
@@ -202,4 +193,42 @@ public class RSA {
 
         return result;
     } 
+
+
+    public static PrivateKey getPrivateKey(String privateKey) throws FileNotFoundException, IOException{
+        PrivateKey result = new PrivateKey();
+        try(BufferedReader in = new BufferedReader(new FileReader(privateKey));) {
+            String d = in.readLine();
+            String N = in.readLine();
+            result.d = new BigInteger(d);
+            result.N = new BigInteger(N);
+        }
+
+        return result;
+    } 
+
+
+    public static BigInteger[] crypt(BigInteger e, BigInteger N, BigInteger[] source) {
+        BigInteger[] result = new BigInteger[source.length];
+
+        for(int i = 0; i < source.length; i++) {
+            BigInteger m = source[i];
+            BigInteger c = m.modPow(e, N);
+            result[i] = c.signum() < 0 ? c.add(N) : c;
+        }
+
+        return result;
+    }
+
+    public static BigInteger[] decrypt(BigInteger d, BigInteger N, BigInteger[] source) {
+        BigInteger[] result = new BigInteger[source.length];
+
+        for(int i = 0; i < source.length; i++) {
+            BigInteger m = source[i];
+            BigInteger c = m.modPow(d, N);
+            result[i] = c.signum() < 0 ? c.add(N) : c;
+        }
+
+        return result;
+    }
 }
