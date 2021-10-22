@@ -345,6 +345,12 @@ public class RSA {
                 out.write(bb.array());                                      // Записываем в файл
             }
             out.write(personalSign.getBytes());                             // Метка в конец
+
+
+            out.close();
+            StringBuffer buff = new StringBuffer(f.getName());
+            buff.append(".sig");
+            f.renameTo(new File(buff.toString()));
         }
         catch (Exception e) {
             e.printStackTrace();
@@ -363,15 +369,20 @@ public class RSA {
         byte[] sourceSHA = RSA.getFileSHA256(f, content);                   // Исходный SHA256
 
         BigInteger[] cryptedSHA = new BigInteger[32];                       // Распакованный SHA256
-        try (FileInputStream in = new FileInputStream(f)) {
+        try (FileInputStream in = new FileInputStream(f);
+             RandomAccessFile target = new RandomAccessFile(f, "rwd");
+            ) {
+            if (content < 0) {
+                throw new IncorrectSignException("Failed to detect start of sign ");
+            }
             in.skip(content);
             
             String personalSign = new String(in.readNBytes("ozzero".getBytes().length));     // Считываем 6 байт и ищем тег "ozzero"
             if (!personalSign.equals("ozzero")) {
-                throw new IncorrectSignException("Failed to find signing");
+                throw new IncorrectSignException("Failed to find start of sign");
             }
 
-            ByteBuffer size = ByteBuffer.allocate(8);               // Проверяем размерность файла с тем что записано в подписи
+            ByteBuffer size = ByteBuffer.allocate(8);                                       // Проверяем размерность файла с тем что записано в подписи
             size.put(in.readNBytes(8)).position(0);
             if (size.getLong() != content) {
                 throw new IncorrectSignException("File size mismatch detected");
@@ -384,14 +395,14 @@ public class RSA {
                 invertArray(inverted);
                 cryptedSHA[i] = new BigInteger(inverted);
             }
-
+            
             byte[] decryptedSHA = RSA.decrypt(key.e, key.N, cryptedSHA);
 
             if (!Arrays.equals(sourceSHA, decryptedSHA)) {
                 throw new IncorrectSignException("Hash sum is not equals");
             }
 
-            personalSign = new String(in.readNBytes("ozzero".getBytes().length));     // Считываем 6 байт и ищем тег "ozzero"
+            personalSign = new String(in.readNBytes("ozzero".getBytes().length));           // Считываем 6 байт и ищем тег "ozzero"
             if (!personalSign.equals("ozzero")) {
                 throw new IncorrectSignException("Failed to find end of sign");
             }
@@ -401,7 +412,13 @@ public class RSA {
             }
 
             System.out.println("Sign is verified");
+            
+            target.setLength(content);                                                      // Возвращаем исходный размер файла
 
+            in.close();
+            target.close();
+            StringBuffer buff = new StringBuffer(f.getName());
+            f.renameTo(new File(buff.subSequence(0, f.getName().length() - 4).toString()));
         }
         catch (IncorrectSignException e) {
             System.out.println(e.getMessage());
