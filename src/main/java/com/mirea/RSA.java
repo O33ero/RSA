@@ -261,42 +261,17 @@ public class RSA {
     } 
 
 
-    /**
-     * Расшифровка массива {@code source} с помощью закрытого ключа 
-     * @param d - закрытая экспонента
-     * @param N - модуль
-     * @param source - исходный массив в формате {@code byte}
-     * @return Зашифрованный массив в формате {@link BigInteger}
-     */
-    public static BigInteger[] crypt(BigInteger d, BigInteger N, byte[] source) {
-        BigInteger[] result = new BigInteger[source.length];
-
-        for(int i = 0; i < source.length; i++) {
-            BigInteger m = new BigInteger(Integer.toString(source[i] + 128));
-            BigInteger c = m.modPow(d, N);
-            result[i] = c;
-        }
-
-        return result;
+    
+    public static byte[] crypt(BigInteger d, BigInteger N, byte[] source) {
+        BigInteger t = new BigInteger(1, source);
+        BigInteger result = t.modPow(d, N);
+        return result.toByteArray();
     }
 
-    /**
-     * Расшифровка массива {@code source} с помощью открытого ключа
-     * @param e - открытая экспонента 
-     * @param N - модуль
-     * @param source - зашифрованный массив в формате {@link BigInteger}
-     * @return Расшифрованный массив в формате {@code byte}
-     */
-    public static byte[] decrypt(BigInteger e, BigInteger N, BigInteger[] source) {
-        byte[] result = new byte[source.length];
-
-        for(int i = 0; i < source.length; i++) {
-            BigInteger m = source[i];
-            BigInteger c = m.modPow(e, N);
-            int temp = c.intValue() - 128;
-            result[i] = (byte)temp;
-        }
-
+    
+    public static BigInteger decrypt(BigInteger e, BigInteger N, byte[] source) {
+        BigInteger t = new BigInteger(1, source); 
+        BigInteger result = t.modPow(e, N);
         return result;
     }
 
@@ -326,28 +301,23 @@ public class RSA {
         PrivateKey key = RSA.getPrivateKey(privateKey);
         long sizeOfFile = RSA.getSizeOfFile(filename);
         byte[] sourceSHA = RSA.getFileSHA256(f, sizeOfFile);
-        BigInteger[] cryptedSHA = RSA.crypt(key.d, key.N, sourceSHA);
+        byte[] cryptedSHA = RSA.crypt(key.d, key.N, sourceSHA);
 
 
 
         String personalSign = "ozzero"; // Сигнатурная подпись
         try (FileOutputStream out = new FileOutputStream(f, true)) {
             out.write(personalSign.getBytes());                             // Метка в начало
-            
-            ByteBuffer size = ByteBuffer.allocate(8).putLong(sizeOfFile);
+
+            ByteBuffer size = ByteBuffer.allocate(8).putLong(sizeOfFile).position(0);
             out.write(size.array());                                        // Записываем исходный размер файла
 
-            for(int i = 0; i < 32; i++) {
-                ByteBuffer bb = ByteBuffer.allocate(258);                   // Создаем буффер на 258 байт
-                byte[] inverted = cryptedSHA[i].toByteArray().clone();
-                invertArray(inverted);
-                bb.put(inverted);                                        // Записываем в буффер один байт хеш-суммы
-                out.write(bb.array());                                      // Записываем в файл
-            }
+            out.write(cryptedSHA);                                          // Заносим подпись
+            
             out.write(personalSign.getBytes());                             // Метка в конец
 
-
             out.close();
+
             StringBuffer buff = new StringBuffer(f.getName());
             buff.append(".sig");
             f.renameTo(new File(buff.toString()));
@@ -359,16 +329,15 @@ public class RSA {
     }
 
 
-    public static void chechSign(String filename, String publicKey) throws IOException, NoSuchAlgorithmException {
+    public static void checkSign(String filename, String publicKey) throws IOException, NoSuchAlgorithmException {
         File f = new File(filename);
         File k = new File(publicKey);
 
         PublicKey key = RSA.getPublicKey(publicKey);
-        long content = RSA.getSizeOfFile(filename) - 8276;                  // Размер файла до подписи
+        long content = RSA.getSizeOfFile(filename) - 276;                   // Размер файла до подписи
 
         byte[] sourceSHA = RSA.getFileSHA256(f, content);                   // Исходный SHA256
 
-        BigInteger[] cryptedSHA = new BigInteger[32];                       // Распакованный SHA256
         try (FileInputStream in = new FileInputStream(f);
              RandomAccessFile target = new RandomAccessFile(f, "rwd");
             ) {
@@ -377,32 +346,28 @@ public class RSA {
             }
             in.skip(content);
             
-            String personalSign = new String(in.readNBytes("ozzero".getBytes().length));     // Считываем 6 байт и ищем тег "ozzero"
+            String personalSign = new String(in.readNBytes("ozzero".getBytes().length));    
             if (!personalSign.equals("ozzero")) {
                 throw new IncorrectSignException("Failed to find start of sign");
             }
 
-            ByteBuffer size = ByteBuffer.allocate(8);                                       // Проверяем размерность файла с тем что записано в подписи
+            ByteBuffer size = ByteBuffer.allocate(8);                                       
             size.put(in.readNBytes(8)).position(0);
             if (size.getLong() != content) {
                 throw new IncorrectSignException("File size mismatch detected");
             }
 
-            for(int i = 0; i < 32; i++) {
-                ByteBuffer bb = ByteBuffer.allocate(258);
-                bb.put(in.readNBytes(258));
-                byte[] inverted = bb.array();
-                invertArray(inverted);
-                cryptedSHA[i] = new BigInteger(inverted);
-            }
-            
-            byte[] decryptedSHA = RSA.decrypt(key.e, key.N, cryptedSHA);
+            byte[] temp = in.readNBytes(256);
+            BigInteger decryptedSHA = RSA.decrypt(key.e, key.N, temp);
 
-            if (!Arrays.equals(sourceSHA, decryptedSHA)) {
+            BigInteger HASH_A = new BigInteger(1, sourceSHA);
+            BigInteger HASH_B = decryptedSHA;
+
+            if(!HASH_A.equals(HASH_B)){
                 throw new IncorrectSignException("Hash sum is not equals");
             }
 
-            personalSign = new String(in.readNBytes("ozzero".getBytes().length));           // Считываем 6 байт и ищем тег "ozzero"
+            personalSign = new String(in.readNBytes("ozzero".getBytes().length));           
             if (!personalSign.equals("ozzero")) {
                 throw new IncorrectSignException("Failed to find end of sign");
             }
