@@ -5,9 +5,7 @@ import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.Arrays;
 import java.util.Random;
 
 import com.mirea.RSA.KeyPair.PrivateKey;
@@ -114,24 +112,12 @@ public class RSA {
      * 
      * @author https://howtodoinjava.com/java/io/sha-md5-file-checksum-hash/
      */
-    public static byte[] getFileSHA256(File file, long sizeOfFile) throws IOException, NoSuchAlgorithmException {
-        MessageDigest digest = MessageDigest.getInstance("SHA-256");
+    public static byte[] getFileSHA256(File file, int sizeOfFile) throws IOException, NoSuchAlgorithmException {
         FileInputStream fis = new FileInputStream(file);
-        
-        byte[] byteArray = new byte[1];
-        int bytesCount = 0; 
-        int j = 0;
-        while (j < sizeOfFile) {
-            if ((bytesCount = fis.read(byteArray)) == -1)
-                break;
-            j++;
-            digest.update(byteArray, 0, bytesCount);
-        };
-        
+        byte[] bytes = SHA256.getHash(fis.readNBytes(sizeOfFile));
         fis.close();
-        
-        byte[] bytes = digest.digest();
-        
+
+
         StringBuilder sb = new StringBuilder();
         for(int i=0; i< bytes.length ;i++)
         {
@@ -148,8 +134,8 @@ public class RSA {
      * @return Размер файла в байтах
      * @throws IOException
      */
-    public static long getSizeOfFile(String path) throws IOException{ 
-        return Files.size(Paths.get(path));
+    public static int getSizeOfFile(String path) throws IOException{ 
+        return (int)Files.size(Paths.get(path));
     }
 
     /**
@@ -299,7 +285,7 @@ public class RSA {
         File k = new File(privateKey);
 
         PrivateKey key = RSA.getPrivateKey(privateKey);
-        long sizeOfFile = RSA.getSizeOfFile(filename);
+        int sizeOfFile = RSA.getSizeOfFile(filename);
         byte[] sourceSHA = RSA.getFileSHA256(f, sizeOfFile);
         byte[] cryptedSHA = RSA.crypt(key.d, key.N, sourceSHA);
 
@@ -334,7 +320,7 @@ public class RSA {
         File k = new File(publicKey);
 
         PublicKey key = RSA.getPublicKey(publicKey);
-        long content = RSA.getSizeOfFile(filename) - 276;                   // Размер файла до подписи
+        int content = RSA.getSizeOfFile(filename) - 276;                   // Размер файла до подписи
 
         byte[] sourceSHA = RSA.getFileSHA256(f, content);                   // Исходный SHA256
 
