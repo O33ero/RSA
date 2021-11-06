@@ -13,8 +13,15 @@ import com.mirea.RSA.KeyPair.PublicKey;
 
 public class RSA {
     
+    private static String PERSONAL_SIGN = "ozzero";                                             // Размер мекти
+    private static int SIZE_OF_CRYPTED = 256;                                                   // Размер зашифрованного хеша 
+    private static int SIZE_OF_SIGN = PERSONAL_SIGN.length() * 2 + Long.BYTES + SIZE_OF_CRYPTED;// Размер всей подписи в конце файла
+                                                                                                // |  Метка   | Размер файла |   Хеш-сумма   | Метка | EOF
+                                                                                                // |  6байт   |     8 байт   |   256 байт    | 6байт | EOF
 
-    /**
+
+
+    /**                                                         
      * Класс содержащий закрытый и открытый ключ для RSA.
      */
     static class KeyPair {
@@ -64,11 +71,10 @@ public class RSA {
      * Вычисляется с помощью Расширенного алгоритма Евклида.
      * Всегда возращает значение больше 0.
      * 
-     * @author База алгоритма: https://github.com/bcgit/bc-java/blob/master/core/src/main/java/org/bouncycastle/pqc/math/ntru/euclid/BigIntEuclidean.java
-     * 
      * @param V - элемент кольца
      * @param M - модуль кольца
      * @return Обратный элемент для элемента V в кольце Z\M
+     * @see https://github.com/bcgit/bc-java/blob/master/core/src/main/java/org/bouncycastle/pqc/math/ntru/euclid/BigIntEuclidean.java
      */
     private static BigInteger getInverse(BigInteger V, BigInteger M) { 
 
@@ -110,20 +116,16 @@ public class RSA {
      * @return Строка с хеш-суммой
      * @throws IOException
      * 
-     * @author https://howtodoinjava.com/java/io/sha-md5-file-checksum-hash/
+     * @see https://howtodoinjava.com/java/io/sha-md5-file-checksum-hash/
      */
     public static byte[] getFileSHA256(File file, int sizeOfFile) throws IOException, NoSuchAlgorithmException {
         FileInputStream fis = new FileInputStream(file);
         byte[] bytes = SHA256.getHash(fis.readNBytes(sizeOfFile));
         fis.close();
 
-
-        StringBuilder sb = new StringBuilder();
-        for(int i=0; i< bytes.length ;i++)
-        {
-            sb.append(Integer.toString((bytes[i] & 0xff) + 0x100, 16).substring(1));
-        }
-        System.out.println(sb);
+        //!!! DEBUG
+        String s = SHA256.bytesToHex(bytes);
+        System.out.println("Hash of " + file.getName() + " = " + s);
         
         return bytes;
     }
@@ -134,8 +136,8 @@ public class RSA {
      * @return Размер файла в байтах
      * @throws IOException
      */
-    public static int getSizeOfFile(String path) throws IOException{ 
-        return (int)Files.size(Paths.get(path));
+    public static long getSizeOfFile(String path) throws IOException{ 
+        return Files.size(Paths.get(path));
     }
 
     /**
@@ -155,7 +157,6 @@ public class RSA {
      * </p> В файле {@code PublicKey} находится 2 числа (открытая экспонента и N). Его можно передать вместе с зашифрованном сообщением.
      * </p> В файле {@code PrivateKey} находится 2 числа (закрытая экспонента и N). Его необходимо держать в секрете.
      * </p> Для удобной связи {@code PrivateKey} и {@code PublicKey} в конце названия файла написан случайный общий идентификационный номер.
-     * 
      */
     public static void generateKeys() {
         BigInteger p = RSA.getRandomPrime(1024);                        // p = Простое
@@ -174,10 +175,13 @@ public class RSA {
         while( !Euler.gcd(e).equals(new BigInteger("1"))) {            // e и Euler взаимно просты
             e = e.nextProbablePrime();
         }
-        System.out.println("e = " + e);
+
+        // !!! DEBUG
+        //System.out.println("e = " + e);
 
         BigInteger d = RSA.getInverse(e, Euler);
-        System.out.println("d = " + d);
+        // !!! DEBUG
+        // System.out.println("d = " + d);
 
         int id = new Random().nextInt(10000000);                        // Случайный id для названия файлов
         try (
@@ -193,7 +197,6 @@ public class RSA {
             outPrivate.write(new String("\n").getBytes());
             outPrivate.write(N.toString().getBytes());
 
-            
         } catch (Exception ex) {
 
             File fPublic = new File("./PublicKey" + id);
@@ -209,8 +212,8 @@ public class RSA {
 
     /**
      * Распаковывает файл с открытым ключом и возвращает объект {@link PublicKey}
-     * @param publicKey
-     * @return
+     * @param publicKey - путь до файла с открытым ключом
+     * @return Объект {@link PublicKey} с закрытым ключом
      * @throws FileNotFoundException
      * @throws IOException
      */
@@ -248,7 +251,7 @@ public class RSA {
 
 
     
-    public static byte[] crypt(BigInteger d, BigInteger N, byte[] source) {
+    public static byte[] encrypt(BigInteger d, BigInteger N, byte[] source) {
         BigInteger t = new BigInteger(1, source);
         BigInteger result = t.modPow(d, N);
         return result.toByteArray();
@@ -274,6 +277,9 @@ public class RSA {
         }
     }
     
+    /**
+     * Исключение подписи
+     */
     static class IncorrectSignException extends Exception  {
         public IncorrectSignException(String message) {
             super(message);
@@ -285,23 +291,17 @@ public class RSA {
         File k = new File(privateKey);
 
         PrivateKey key = RSA.getPrivateKey(privateKey);
-        int sizeOfFile = RSA.getSizeOfFile(filename);
+        int sizeOfFile = (int)RSA.getSizeOfFile(filename);
         byte[] sourceSHA = RSA.getFileSHA256(f, sizeOfFile);
-        byte[] cryptedSHA = RSA.crypt(key.d, key.N, sourceSHA);
+        byte[] cryptedSHA = RSA.encrypt(key.d, key.N, sourceSHA);
 
-
-
-        String personalSign = "ozzero"; // Сигнатурная подпись
         try (FileOutputStream out = new FileOutputStream(f, true)) {
-            out.write(personalSign.getBytes());                             // Метка в начало
+            out.write(PERSONAL_SIGN.getBytes());                             // Метка в начало
 
             ByteBuffer size = ByteBuffer.allocate(8).putLong(sizeOfFile).position(0);
             out.write(size.array());                                        // Записываем исходный размер файла
-
             out.write(cryptedSHA);                                          // Заносим подпись
-            
-            out.write(personalSign.getBytes());                             // Метка в конец
-
+            out.write(PERSONAL_SIGN.getBytes());                            // Метка в конец
             out.close();
 
             StringBuffer buff = new StringBuffer(f.getName());
@@ -309,8 +309,11 @@ public class RSA {
             f.renameTo(new File(buff.toString()));
         }
         catch (Exception e) {
-            e.printStackTrace();
+            System.out.println("Something went wrong! The file could not be signed.");
+            return;
         }
+
+        System.out.println("The file is signed succesfully.");
 
     }
 
@@ -320,9 +323,9 @@ public class RSA {
         File k = new File(publicKey);
 
         PublicKey key = RSA.getPublicKey(publicKey);
-        int content = RSA.getSizeOfFile(filename) - 276;                   // Размер файла до подписи
+        int content = (int)RSA.getSizeOfFile(filename) - SIZE_OF_SIGN;                   // Размер файла до подписи
 
-        byte[] sourceSHA = RSA.getFileSHA256(f, content);                   // Исходный SHA256
+        byte[] sourceSHA = RSA.getFileSHA256(f, content);                           // Исходный SHA256
 
         try (FileInputStream in = new FileInputStream(f);
              RandomAccessFile target = new RandomAccessFile(f, "rwd");
@@ -332,8 +335,8 @@ public class RSA {
             }
             in.skip(content);
             
-            String personalSign = new String(in.readNBytes("ozzero".getBytes().length));    
-            if (!personalSign.equals("ozzero")) {
+            String personalSign = new String(in.readNBytes(PERSONAL_SIGN.getBytes().length));    
+            if (!personalSign.equals(PERSONAL_SIGN)) {
                 throw new IncorrectSignException("Failed to find start of sign");
             }
 
@@ -353,16 +356,16 @@ public class RSA {
                 throw new IncorrectSignException("Hash sum is not equals");
             }
 
-            personalSign = new String(in.readNBytes("ozzero".getBytes().length));           
-            if (!personalSign.equals("ozzero")) {
+            personalSign = new String(in.readNBytes(PERSONAL_SIGN.getBytes().length));           
+            if (!personalSign.equals(PERSONAL_SIGN)) {
                 throw new IncorrectSignException("Failed to find end of sign");
             }
 
             if (in.available() != 0) {
-                throw new IncorrectSignException("After sign had unexpected content");
+                throw new IncorrectSignException("Failed to find end of sign");
             }
 
-            System.out.println("Sign is verified");
+            System.out.println("Sign and File has not been modified.");
             
             target.setLength(content);                                                      // Возвращаем исходный размер файла
 

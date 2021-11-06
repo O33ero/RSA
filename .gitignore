@@ -1,3 +1,5 @@
-target/classes/com/mirea/*
-PublicKey*
-PrivateKey*
+*
+!.gitignore
+!*.java
+!pom.xml
+!src/*
