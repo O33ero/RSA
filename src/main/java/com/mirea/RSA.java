@@ -125,7 +125,7 @@ public class RSA {
 
         //!!! DEBUG
         String s = SHA256.bytesToHex(bytes);
-        System.out.println("Hash of " + file.getName() + " = " + s);
+        System.out.println("Hash of first " + Integer.toString(sizeOfFile) + " bytes of "  + file.getName() + " = " + s);
         
         return bytes;
     }
@@ -171,7 +171,7 @@ public class RSA {
         BigInteger Euler = qMinusOne.multiply(pMinusOne);
 
         int i = new Random().nextInt(17 - 5) + 5;                      // Случайное целое число из диопазона[5, 32]
-        BigInteger e = RSA.getRandomPrime(i);                          // Открытая экспонента
+        BigInteger e = RSA.getRandomPrime(16);                          // Открытая экспонента
         while( !Euler.gcd(e).equals(new BigInteger("1"))) {            // e и Euler взаимно просты
             e = e.nextProbablePrime();
         }
