@@ -5,10 +5,10 @@
   <modelVersion>4.0.0</modelVersion>
 
   <groupId>com.mirea</groupId>
-  <artifactId>rsa</artifactId>
+  <artifactId>Sign</artifactId>
   <version>1.0</version>
 
-  <name>rsa</name>
+  <name>Sign</name>
   <!-- FIXME change it to the project's website -->
   <url>http://www.example.com</url>
 
