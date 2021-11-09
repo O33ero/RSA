@@ -158,7 +158,7 @@ public class RSA {
      * </p> В файле {@code PrivateKey} находится 2 числа (закрытая экспонента и N). Его необходимо держать в секрете.
      * </p> Для удобной связи {@code PrivateKey} и {@code PublicKey} в конце названия файла написан случайный общий идентификационный номер.
      */
-    public static void generateKeys() {
+    public static void generateKeys(String path) throws IOException{
         BigInteger p = RSA.getRandomPrime(1024);                        // p = Простое
 
         BigInteger q = RSA.getRandomPrime(1024);                        // q = Простое
@@ -170,7 +170,6 @@ public class RSA {
         BigInteger pMinusOne = p.subtract(new BigInteger("1"));
         BigInteger Euler = qMinusOne.multiply(pMinusOne);
 
-        int i = new Random().nextInt(17 - 5) + 5;                      // Случайное целое число из диопазона[5, 32]
         BigInteger e = RSA.getRandomPrime(16);                          // Открытая экспонента
         while( !Euler.gcd(e).equals(new BigInteger("1"))) {            // e и Euler взаимно просты
             e = e.nextProbablePrime();
@@ -184,9 +183,14 @@ public class RSA {
         // System.out.println("d = " + d);
 
         int id = new Random().nextInt(10000000);                        // Случайный id для названия файлов
+        File f1 = new File(path + "PublicKey" + Integer.toString(id));
+        File f2 = new File(path + "PrivateKey" + Integer.toString(id));
+        f1.createNewFile();
+        f2.createNewFile();
+
         try (
-             FileOutputStream outPublic = new FileOutputStream("PublicKey" + id);
-             FileOutputStream outPrivate = new FileOutputStream("PrivateKey" + id);
+            FileOutputStream outPublic = new FileOutputStream(f1);
+            FileOutputStream outPrivate = new FileOutputStream(f2);
              ) {
 
             outPublic.write(e.toString().getBytes());
@@ -288,7 +292,6 @@ public class RSA {
 
     public static void signingFile(String filename, String privateKey) throws IOException, NoSuchAlgorithmException {
         File f = new File(filename);
-        File k = new File(privateKey);
 
         PrivateKey key = RSA.getPrivateKey(privateKey);
         int sizeOfFile = (int)RSA.getSizeOfFile(filename);
@@ -320,7 +323,6 @@ public class RSA {
 
     public static void checkSign(String filename, String publicKey) throws IOException, NoSuchAlgorithmException {
         File f = new File(filename);
-        File k = new File(publicKey);
 
         PublicKey key = RSA.getPublicKey(publicKey);
         int content = (int)RSA.getSizeOfFile(filename) - SIZE_OF_SIGN;                   // Размер файла до подписи
