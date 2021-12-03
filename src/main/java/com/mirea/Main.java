@@ -20,7 +20,7 @@ public class Main {
         String filename = "";
         String privatekey = "";
         String publickey = "";
-
+        
         if (args.length == 0) {
             System.out.println("Cannot detect flag <-h, -k, -e, -d>");
             for(String now : info) {
@@ -38,7 +38,7 @@ public class Main {
             case "-k":
                 try {
                     filename = args[1];
-                RSA.generateKeys(filename);
+                SignRSA.generateKeys(filename);
                 } 
                 catch (IOException e) {
                     System.out.println("ERROR: Failed to create files.");
@@ -52,7 +52,7 @@ public class Main {
                 try {
                     filename = args[1];
                     privatekey = args[2];
-                    RSA.signingFile(filename, privatekey);
+                    SignRSA.signingFile(filename, privatekey);
                 }
                 catch (NoSuchFileException e) {
                     System.out.println("ERROR: file " + filename + " is not exist");
@@ -65,7 +65,7 @@ public class Main {
                 try {
                     filename = args[1];
                     publickey = args[2];
-                    RSA.checkSign(filename, publickey);
+                    SignRSA.checkSign(filename, publickey);
                 }
                 catch (NoSuchFileException e) {
                     System.out.println("ERROR: file " + filename + " is not exist");
